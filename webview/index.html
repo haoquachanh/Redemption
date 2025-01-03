@@ -38,18 +38,15 @@
     <h2>Generate Commit Data</h2>
 
     <!-- Input field for file search -->
-    <label for="file-search">Enter file name:</label>
+    <label for="file-search">Enter files name (separated by commas ",")</label>
     <input type="text" id="file-search" placeholder="Type to search files..." oninput="filterFiles()">
     
     <!-- List of file suggestions -->
     <div id="file-suggestions" class="file-list"></div>
 
     <!-- Input for author and committer date -->
-    <label for="author-date">Author Date:</label>
-    <input type="datetime-local" id="author-date" value="2024-12-31T10:42:00">
-
-    <label for="committer-date">Committer Date:</label>
-    <input type="datetime-local" id="committer-date" value="2024-12-31T10:43:00">
+    <label for="date">Date:</label>
+    <input type="datetime-local" id="date" value="2024-12-31T10:42:00">
 
     <!-- Input for commit message -->
     <label for="commit-content">Commit Message:</label>
@@ -60,48 +57,90 @@
     <script>
         const vscode = acquireVsCodeApi();  // VSCode API to communicate with extension
         let allFiles = [];  // Store all file paths in the project
-
+        let currentSelectionIndex = -1;  // Track the current highlighted index in suggestions
+    
         // Get file suggestions when input changes
         function filterFiles() {
-            const searchText = document.getElementById('file-search').value.toLowerCase();
+            const searchText = document.getElementById('file-search').value.split(',').pop().toLowerCase();
+
             const filteredFiles = allFiles.filter(file => file.toLowerCase().includes(searchText));
+            currentSelectionIndex = -1;  // Reset the selection index
             displayFileSuggestions(filteredFiles);
         }
-
+    
         // Display the file suggestions
         function displayFileSuggestions(files) {
             const suggestionDiv = document.getElementById('file-suggestions');
             suggestionDiv.innerHTML = '';
             
-            files.forEach(file => {
+            files.forEach((file, index) => {
                 const div = document.createElement('div');
                 div.classList.add('file-item');
                 div.textContent = file;
+                div.dataset.index = index;
                 div.onclick = () => selectFile(file);
                 suggestionDiv.appendChild(div);
             });
         }
-
-        // Select a file when user clicks on suggestion
+    
+        // Select a file when user clicks on suggestion or presses Enter
         function selectFile(file) {
-            document.getElementById('file-search').value = file;  // Fill the input with selected file
+            let temp=document.getElementById('file-search').value;  // Fill the input with selected file
+            temp = temp.includes(',') ? temp.slice(0, temp.lastIndexOf(',')) : '';
+            document.getElementById('file-search').value = temp.length>0? temp + "," + file: file;  // Fill the input with selected file
             document.getElementById('file-suggestions').innerHTML = '';  // Clear suggestions
         }
-
+    
+        // Highlight the current selection
+        function highlightSelection(index, files) {
+            const suggestionDiv = document.getElementById('file-suggestions');
+            const items = suggestionDiv.getElementsByClassName('file-item');
+    
+            Array.from(items).forEach((item, i) => {
+                if (i === index) {
+                    item.style.backgroundColor = '#e0e0e0';  // Highlight
+                } else {
+                    item.style.backgroundColor = '';  // Remove highlight
+                }
+            });
+            
+            // Auto-scroll to keep the highlighted item in view
+            if (items[index]) {
+                items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+    
+        // Handle key navigation
+        document.getElementById('file-search').addEventListener('keydown', (event) => {
+            const suggestionDiv = document.getElementById('file-suggestions');
+            const files = Array.from(suggestionDiv.getElementsByClassName('file-item')).map(item => item.textContent);
+    
+            if (event.key === 'ArrowDown') {
+                currentSelectionIndex = (currentSelectionIndex + 1) % files.length;
+                highlightSelection(currentSelectionIndex, files);
+                event.preventDefault();  // Prevent cursor movement in input
+            } else if (event.key === 'ArrowUp') {
+                currentSelectionIndex = (currentSelectionIndex - 1 + files.length) % files.length;
+                highlightSelection(currentSelectionIndex, files);
+                event.preventDefault();  // Prevent cursor movement in input
+            } else if (event.key === 'Enter' && currentSelectionIndex >= 0) {
+                selectFile(files[currentSelectionIndex]);
+                event.preventDefault();  // Prevent form submission
+            }
+        });
+    
         // Listen for the generate commit data action
         document.getElementById('generate-btn').onclick = () => {
             const selectedFile = document.getElementById('file-search').value;
-            const authorDate = document.getElementById('author-date').value;
-            const committerDate = document.getElementById('committer-date').value;
+            const date = document.getElementById('date').value;
             const commitContent = document.getElementById('commit-content').value || "fix something";
-
+    
             if (selectedFile) {
                 vscode.postMessage({
                     command: 'generateCommitData',
                     data: {
-                        git_author_date: authorDate,
-                        git_committer_date: committerDate,
-                        files: [selectedFile],
+                        date: date,
+                        files: selectedFile.split(','),
                         content: commitContent,
                         defaultContent: "fix something"
                     }
@@ -110,12 +149,12 @@
                 alert('Please select a file.');
             }
         };
-
+    
         // Fetch all files in the workspace
         window.addEventListener('DOMContentLoaded', () => {
             vscode.postMessage({ command: 'getAllFiles' });
         });
-
+    
         // Listen for the message from the extension with file list
         window.addEventListener('message', event => {
             const message = event.data;
@@ -126,6 +165,6 @@
             }
         });
     </script>
-
+    
 </body>
 </html>
