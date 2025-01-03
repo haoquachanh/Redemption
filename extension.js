@@ -1,7 +1,6 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 function activate(context) {
     let disposable = vscode.commands.registerCommand('generate-commit-data-extension.generateCommitData', function () {
@@ -30,23 +29,15 @@ function activate(context) {
                 case 'generateCommitData':
                     const commitData = message.data;
 
-                    // Perform the commit immediately instead of creating a JSON file
+                    // Đường dẫn để lưu file data-commit.json
+                    const jsonFilePath = path.join(vscode.workspace.rootPath, 'data-commit.json');
+
+                    // Tạo file data-commit.json
                     try {
-                        const authorDate = commitData.date;
-                        const files = commitData.files;
-                        const content = commitData.content || commitData.defaultContent;
-
-                        // Add files to the staging area and commit
-                        // files.forEach((file) => {
-                        //     execSync(`git add ${file}`);
-                        // });
-
-                        const envVars = `GIT_AUTHOR_DATE="${authorDate}" GIT_COMMITTER_DATE="${authorDate}"`;
-                        execSync(`${envVars} git commit -m "${content}"`, { stdio: 'inherit' });
-
-                        vscode.window.showInformationMessage(`Commit successful: "${content}" with AUTHOR_DATE=${authorDate}`);
+                        fs.writeFileSync(jsonFilePath, JSON.stringify([commitData], null, 2));
+                        vscode.window.showInformationMessage('Đã tạo file data-commit.json thành công!');
                     } catch (error) {
-                        vscode.window.showErrorMessage('Error during commit: ' + error.message);
+                        vscode.window.showErrorMessage('Có lỗi khi tạo file: ' + error.message);
                     }
                     break;
             }
@@ -60,7 +51,7 @@ function getAllFiles(dirPath) {
     const rootPath = vscode.workspace.rootPath;
     let results = [];
 
-    // Read .gitignore if exists
+    // Đọc nội dung .gitignore nếu có
     const gitIgnorePath = path.join(rootPath, '.gitignore');
     let gitIgnorePatterns = [];
     if (fs.existsSync(gitIgnorePath)) {
@@ -73,10 +64,10 @@ function getAllFiles(dirPath) {
         const filePath = path.join(dirPath, file);
         const stat = fs.statSync(filePath);
 
-        // Skip files in the .git directory
+        // Bỏ qua các file trong thư mục .git
         if (file === '.git') return;
 
-        // Check if file matches any pattern in .gitignore
+        // Kiểm tra xem file có khớp với các pattern trong .gitignore không
         if (isIgnored(file, gitIgnorePatterns)) return;
 
         if (stat && stat.isDirectory()) {
@@ -89,7 +80,7 @@ function getAllFiles(dirPath) {
     return results;
 }
 
-// Check if a file matches any pattern in .gitignore
+// Kiểm tra xem file có khớp với các pattern trong .gitignore hay không
 function isIgnored(file, gitIgnorePatterns) {
     return gitIgnorePatterns.some(pattern => {
         const regex = new RegExp('^' + pattern.replace(/\//g, '\\/').replace(/\*/g, '.*') + '$');
