@@ -1,0 +1,131 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Commit Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+        }
+        .file-list {
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 5px;
+            cursor: pointer;
+        }
+        .file-item:hover {
+            background-color: #f0f0f0;
+        }
+        input[type="text"], input[type="datetime-local"], textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 80px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Generate Commit Data</h2>
+
+    <!-- Input field for file search -->
+    <label for="file-search">Enter file name:</label>
+    <input type="text" id="file-search" placeholder="Type to search files..." oninput="filterFiles()">
+    
+    <!-- List of file suggestions -->
+    <div id="file-suggestions" class="file-list"></div>
+
+    <!-- Input for author and committer date -->
+    <label for="author-date">Author Date:</label>
+    <input type="datetime-local" id="author-date" value="2024-12-31T10:42:00">
+
+    <label for="committer-date">Committer Date:</label>
+    <input type="datetime-local" id="committer-date" value="2024-12-31T10:43:00">
+
+    <!-- Input for commit message -->
+    <label for="commit-content">Commit Message:</label>
+    <textarea id="commit-content" placeholder="Enter commit message or leave blank to use default..."></textarea>
+
+    <button id="generate-btn">Generate Commit Data</button>
+
+    <script>
+        const vscode = acquireVsCodeApi();  // VSCode API to communicate with extension
+        let allFiles = [];  // Store all file paths in the project
+
+        // Get file suggestions when input changes
+        function filterFiles() {
+            const searchText = document.getElementById('file-search').value.toLowerCase();
+            const filteredFiles = allFiles.filter(file => file.toLowerCase().includes(searchText));
+            displayFileSuggestions(filteredFiles);
+        }
+
+        // Display the file suggestions
+        function displayFileSuggestions(files) {
+            const suggestionDiv = document.getElementById('file-suggestions');
+            suggestionDiv.innerHTML = '';
+            
+            files.forEach(file => {
+                const div = document.createElement('div');
+                div.classList.add('file-item');
+                div.textContent = file;
+                div.onclick = () => selectFile(file);
+                suggestionDiv.appendChild(div);
+            });
+        }
+
+        // Select a file when user clicks on suggestion
+        function selectFile(file) {
+            document.getElementById('file-search').value = file;  // Fill the input with selected file
+            document.getElementById('file-suggestions').innerHTML = '';  // Clear suggestions
+        }
+
+        // Listen for the generate commit data action
+        document.getElementById('generate-btn').onclick = () => {
+            const selectedFile = document.getElementById('file-search').value;
+            const authorDate = document.getElementById('author-date').value;
+            const committerDate = document.getElementById('committer-date').value;
+            const commitContent = document.getElementById('commit-content').value || "fix something";
+
+            if (selectedFile) {
+                vscode.postMessage({
+                    command: 'generateCommitData',
+                    data: {
+                        git_author_date: authorDate,
+                        git_committer_date: committerDate,
+                        files: [selectedFile],
+                        content: commitContent,
+                        defaultContent: "fix something"
+                    }
+                });
+            } else {
+                alert('Please select a file.');
+            }
+        };
+
+        // Fetch all files in the workspace
+        window.addEventListener('DOMContentLoaded', () => {
+            vscode.postMessage({ command: 'getAllFiles' });
+        });
+
+        // Listen for the message from the extension with file list
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'fileList':
+                    allFiles = message.files;  // Store files for suggestion
+                    break;
+            }
+        });
+    </script>
+
+</body>
+</html>
